@@ -1,0 +1,4 @@
+project_id = "jzaxqrfyzyzcbslsvyxc"
+
+[functions.optimize-surveillance]
+verify_jwt = false
