@@ -85,10 +85,11 @@ export default function Professors() {
   const handleAddProfessor = async (newProf: any) => {
     try {
       const created = await api.professors.create({
-        name: newProf.name,
+        first_name: newProf.first_name,
+        last_name: newProf.last_name,
         email: newProf.email,
         phone: newProf.phone,
-        department: newProf.department
+        department: newProf.department,
       });
 
       // Refresh local state
@@ -103,10 +104,11 @@ export default function Professors() {
   const handleUpdateProfessor = async (updatedProf: any) => {
     try {
       await api.professors.update(updatedProf.id, {
-        name: updatedProf.name,
+        first_name: updatedProf.first_name,
+        last_name: updatedProf.last_name,
         email: updatedProf.email,
         phone: updatedProf.phone,
-        department: updatedProf.department
+        department: updatedProf.department,
       });
       await fetchProfessors();
       setDialogOpen(false);

@@ -6,45 +6,91 @@ export const api = {
     getAll: async () => {
       const { data, error } = await supabase
         .from("professors")
-        .select("*")
+        .select("*, department:departments(name)")
         .order("first_name");
       if (error) throw error;
-      return data;
+      return (data || []).map((p: any) => ({
+        ...p,
+        department: p.department?.name || null,
+      }));
     },
     create: async (professor: {
       first_name: string;
       last_name: string;
       email?: string;
       phone?: string;
-      department?: string;
+      department?: string; // department name
     }) => {
+      let department_id: string | null = null;
+      if (professor.department) {
+        const { data: dept, error: deptErr } = await supabase
+          .from("departments")
+          .select("id")
+          .eq("name", professor.department)
+          .limit(1);
+        if (!deptErr && dept && dept.length > 0) {
+          department_id = dept[0].id;
+        }
+      }
+
+      const payload = {
+        first_name: professor.first_name,
+        last_name: professor.last_name,
+        email: professor.email,
+        phone: professor.phone,
+        department_id,
+      };
+
       const { data, error } = await supabase
         .from("professors")
-        .insert(professor)
+        .insert(payload)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
     update: async (
-      id: number,
+      id: string,
       updates: Partial<{
-        name: string;
+        first_name: string;
+        last_name: string;
         email: string;
         phone: string;
-        department: string;
+        department: string; // department name
       }>
     ) => {
+      let department_id: string | undefined;
+      if (updates.department) {
+        const { data: dept, error: deptErr } = await supabase
+          .from("departments")
+          .select("id")
+          .eq("name", updates.department)
+          .limit(1);
+        if (!deptErr && dept && dept.length > 0) {
+          department_id = dept[0].id;
+        } else {
+          department_id = null as any;
+        }
+      }
+
+      const payload: any = {
+        ...(updates.first_name !== undefined && { first_name: updates.first_name }),
+        ...(updates.last_name !== undefined && { last_name: updates.last_name }),
+        ...(updates.email !== undefined && { email: updates.email }),
+        ...(updates.phone !== undefined && { phone: updates.phone }),
+        ...(updates.department !== undefined && { department_id }),
+      };
+
       const { data, error } = await supabase
         .from("professors")
-        .update(updates)
+        .update(payload)
         .eq("id", id)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
-    delete: async (id: number) => {
+    delete: async (id: string) => {
       const { error } = await supabase.from("professors").delete().eq("id", id);
       if (error) throw error;
     },
