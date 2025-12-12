@@ -12,39 +12,102 @@ export const api = {
       return data;
     },
     create: async (professor: {
-      first_name: string;
-      last_name: string;
+      first_name?: string;
+      last_name?: string;
+      name?: string;
       email?: string;
       phone?: string;
       department?: string;
+      department_id?: string | null;
     }) => {
+      let first_name = professor.first_name?.trim();
+      let last_name = professor.last_name?.trim();
+      if ((!first_name || !last_name) && professor.name) {
+        const parts = String(professor.name).trim().split(/\s+/);
+        first_name = first_name || parts.shift() || "";
+        last_name = last_name || parts.join(" ");
+      }
+
+      let department_id: string | null = professor.department_id ?? null;
+      if (!department_id && professor.department) {
+        const { data: dept } = await supabase
+          .from("departments")
+          .select("id")
+          .eq("name", professor.department)
+          .limit(1);
+        if (dept && dept.length > 0) {
+          department_id = dept[0].id as string;
+        }
+      }
+
+      const payload = {
+        first_name,
+        last_name,
+        email: professor.email,
+        phone: professor.phone,
+        department_id,
+      } as const;
+
       const { data, error } = await supabase
         .from("professors")
-        .insert({ ...professor, name: `${professor.first_name} ${professor.last_name}` })
+        .insert(payload as any)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
     update: async (
-      id: number,
+      id: string,
       updates: Partial<{
+        first_name: string;
+        last_name: string;
         name: string;
         email: string;
         phone: string;
         department: string;
+        department_id: string | null;
       }>
     ) => {
+      let first_name = updates.first_name;
+      let last_name = updates.last_name;
+      if (updates.name) {
+        const parts = String(updates.name).trim().split(/\s+/);
+        first_name = parts.shift() || first_name;
+        last_name = parts.join(" ") || last_name;
+      }
+
+      let department_id: string | null | undefined = updates.department_id;
+      if (updates.department !== undefined && department_id === undefined) {
+        if (updates.department) {
+          const { data: dept } = await supabase
+            .from("departments")
+            .select("id")
+            .eq("name", updates.department)
+            .limit(1);
+          department_id = dept && dept.length > 0 ? (dept[0].id as string) : null;
+        } else {
+          department_id = null;
+        }
+      }
+
+      const payload: Record<string, unknown> = {
+        ...(first_name !== undefined && { first_name }),
+        ...(last_name !== undefined && { last_name }),
+        ...(updates.email !== undefined && { email: updates.email }),
+        ...(updates.phone !== undefined && { phone: updates.phone }),
+        ...(department_id !== undefined && { department_id }),
+      };
+
       const { data, error } = await supabase
         .from("professors")
-        .update(updates)
+        .update(payload as any)
         .eq("id", id)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
-    delete: async (id: number) => {
+    delete: async (id: string) => {
       const { error } = await supabase.from("professors").delete().eq("id", id);
       if (error) throw error;
     },
@@ -58,7 +121,19 @@ export const api = {
         .select("*")
         .order("name");
       if (error) throw error;
-      return data;
+      return (data || []).map((r: any) => ({
+        ...r,
+        type:
+          r.room_type === "auditorium"
+            ? "Amphithéâtre"
+            : r.room_type === "lab"
+            ? "Salle TP"
+            : "Salle TD",
+        equipment: [
+          ...(r.has_computers ? ["Ordinateurs"] : []),
+          ...(r.has_projector ? ["Vidéoprojecteur"] : []),
+        ],
+      }));
     },
     create: async (room: {
       name: string;
@@ -79,17 +154,30 @@ export const api = {
       if (error) throw error;
       return data;
     },
-    update: async (id: number, updates: any) => {
+    update: async (id: string, updates: any) => {
+      const payload: any = {
+        ...(updates.name !== undefined && { name: updates.name }),
+        ...(updates.capacity !== undefined && { capacity: updates.capacity }),
+        ...(updates.building !== undefined && { building: updates.building }),
+      };
+      if (updates.type !== undefined) {
+        payload.room_type = updates.type === "Amphithéâtre" ? "auditorium" : updates.type === "Salle TP" || updates.type === "Laboratoire" ? "lab" : "classroom";
+      }
+      if (updates.equipment !== undefined) {
+        payload.has_computers = !!updates.equipment?.includes("Ordinateurs");
+        payload.has_projector = !!updates.equipment?.includes("Vidéoprojecteur");
+      }
+
       const { data, error } = await supabase
         .from("rooms")
-        .update(updates)
+        .update(payload)
         .eq("id", id)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
-    delete: async (id: number) => {
+    delete: async (id: string) => {
       const { error } = await supabase.from("rooms").delete().eq("id", id);
       if (error) throw error;
     },
@@ -108,14 +196,10 @@ export const api = {
         )
         .order("name");
       if (error) throw error;
-      // Compose full name from joined professor
-      return data.map((m) => {
-        const prof = (m as any).professor as { first_name?: string; last_name?: string } | null | undefined;
-        const fullName = prof && (prof.first_name || prof.last_name)
-          ? `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim()
-          : "Non assigné";
-        return { ...m, professor: fullName };
-      });
+      return data.map((m) => ({
+        ...m,
+        professor: m.professor?.first_name || "Non assigné",
+      }));
     },
     create: async (module: any) => {
       const code = String(module.code || "").toUpperCase();
@@ -155,7 +239,7 @@ export const api = {
         return data;
       }
     },
-    update: async (id: number, updates: any) => {
+    update: async (id: string, updates: any) => {
       const { data, error } = await supabase
         .from("modules")
         .update(updates)
@@ -165,7 +249,7 @@ export const api = {
       if (error) throw error;
       return data;
     },
-    delete: async (id: number) => {
+    delete: async (id: string) => {
       const { error } = await supabase.from("modules").delete().eq("id", id);
       if (error) throw error;
     },
@@ -187,38 +271,13 @@ export const api = {
         .order("date");
       if (error) throw error;
 
-      // Transform for UI
-      return data.map((e) => {
-        const sup = (e as any).supervisor as { first_name?: string; last_name?: string } | null | undefined;
-        const supName = sup && (sup.first_name || sup.last_name)
-          ? `${sup.first_name ?? ""} ${sup.last_name ?? ""}`.trim()
-          : "Non assigné";
-
-        const start = (e as any).start_time as string | undefined;
-        const durationMin = (e as any).duration_minutes as number | undefined;
-        let end: string | undefined = (e as any).end_time as string | undefined;
-        if (start && durationMin && !end) {
-          const [h, m] = start.split(":").map((x: string) => parseInt(x, 10));
-          const total = h * 60 + m + durationMin;
-          const eh = Math.floor((total % (24 * 60)) / 60)
-            .toString()
-            .padStart(2, "0");
-          const em = Math.floor(total % 60)
-            .toString()
-            .padStart(2, "0");
-          end = `${eh}:${em}`;
-        }
-
-        return {
-          ...e,
-          module: e.module?.name,
-          code: e.module?.code,
-          room: e.room?.name || "Non assignée",
-          supervisor: supName,
-          time: start && end ? `${start} - ${end}` : start || (e as any).time,
-          duration: typeof durationMin === "number" ? durationMin / 60 : null,
-        };
-      });
+      return data.map((e) => ({
+        ...e,
+        module: e.module?.name,
+        code: e.module?.code,
+        room: e.room?.name || "Non assignée",
+        supervisor: e.supervisor?.first_name || "Non assigné",
+      }));
     },
     create: async (exam: any) => {
       const start = String(exam.time || "");
@@ -257,7 +316,7 @@ export const api = {
       if (error) throw error;
       return data;
     },
-    update: async (id: number, updates: any) => {
+    update: async (id: string, updates: any) => {
       const start = updates.time ? String(updates.time) : updates.start_time;
       const durationMin = updates.duration_minutes ?? (updates.duration ? Math.round(Number(updates.duration) * 60) : undefined);
       let end: string | undefined = updates.end_time;
@@ -295,7 +354,7 @@ export const api = {
       if (error) throw error;
       return data;
     },
-    delete: async (id: number) => {
+    delete: async (id: string) => {
       const { error } = await supabase.from("exams").delete().eq("id", id);
       if (error) throw error;
     },

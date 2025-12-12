@@ -30,6 +30,7 @@ import {
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import { api } from "@/services/api";
+import jsPDF from "jspdf";
 import { useToast } from "@/hooks/use-toast";
 
 const timeSlots = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
@@ -41,6 +42,66 @@ export default function Calendar() {
   const [addEventOpen, setAddEventOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  const getEventColorClass = (e: any) => {
+    if (e.color) return e.color;
+    const t = (e.title || "").toLowerCase();
+    if (t.includes("web")) return "bg-info";
+    if (t.includes("bd") || t.includes("données")) return "bg-success";
+    if (t.includes("élec")) return "bg-warning";
+    if (t.includes("mécan")) return "bg-destructive";
+    return "bg-primary";
+  };
+
+  const getEventHex = (e: any) => {
+    const cls = getEventColorClass(e);
+    if (cls.includes("info")) return "#0ea5e9";
+    if (cls.includes("success")) return "#22c55e";
+    if (cls.includes("warning")) return "#f59e0b";
+    if (cls.includes("destructive")) return "#ef4444";
+    return "#2563eb";
+  };
+
+  const exportWeekPdf = () => {
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text(`Emploi du temps – Semaine du ${format(startOfWeek(currentDate, { weekStartsOn: 1 }), "dd/MM/yyyy")}`, 40, 40);
+    doc.setFontSize(10);
+    const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+    const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+    const colW = 110;
+    const rowH = 40;
+    const left = 40;
+    const top = 70;
+    doc.setFont("helvetica", "normal");
+    days.forEach((day, di) => {
+      doc.text(format(day, "EEE dd/MM", { locale: fr }), left + di * colW, top);
+    });
+    timeSlots.forEach((time, ti) => {
+      doc.text(time, left - 30, top + (ti + 1) * rowH);
+    });
+    days.forEach((day, di) => {
+      const dayEvents = events.filter((e: any) => isSameDay(e.date, day));
+      dayEvents.forEach((e: any) => {
+        const hour = parseInt(e.time.split(":")[0]);
+        const y = top + (hour - 7) * rowH;
+        const x = left + di * colW;
+        const h = Math.max(rowH, (e.duration || 60) / 60 * rowH);
+        const w = colW - 10;
+        const color = getEventHex(e);
+        doc.setFillColor(color);
+        doc.roundedRect(x, y, w, h, 6, 6, "F");
+        doc.setTextColor("#ffffff");
+        doc.setFont("helvetica", "bold");
+        doc.text((e.title || "").slice(0, 22), x + 8, y + 16);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${e.time} · ${e.room || "Salle"}`, x + 8, y + 30);
+        doc.setTextColor("#000000");
+      });
+    });
+    doc.save("emploi_semaine.pdf");
+  };
 
   const fetchEvents = async () => {
     try {
@@ -167,6 +228,9 @@ export default function Calendar() {
               <List className="h-4 w-4" />
               Jour
             </Button>
+            <Button variant="gradient" size="sm" className="gap-1.5" onClick={exportWeekPdf}>
+              Exporter PDF
+            </Button>
           </div>
         </div>
 
@@ -187,7 +251,14 @@ export default function Calendar() {
                   {/* Render Events for this day */}
                   <div className="space-y-1 flex-1">
                     {events.filter(e => isSameDay(e.date, day)).map(e => (
-                      <div key={`${e.id}-${day.toISOString()}`} className={cn("text-[10px] p-1 rounded truncate", e.color, "text-primary-foreground")}>
+                      <div
+                        key={`${e.id}-${day.toISOString()}`}
+                        className={cn(
+                          "text-[11px] p-1.5 rounded truncate shadow-sm ring-1 ring-border/40",
+                          getEventColorClass(e),
+                          "text-primary-foreground"
+                        )}
+                      >
                         {e.title}
                       </div>
                     ))}
@@ -212,7 +283,14 @@ export default function Calendar() {
                     <div className="w-20 py-2 text-sm text-muted-foreground border-r border-border/30">{time}</div>
                     <div className="flex-1 p-2 relative">
                       {dayEvents.map(e => (
-                        <div key={e.id} className={cn("absolute left-2 right-2 top-1 bottom-1 rounded p-2 text-sm", e.color, "text-primary-foreground")}>
+                        <div
+                          key={e.id}
+                          className={cn(
+                            "absolute left-2 right-2 top-1 bottom-1 rounded p-2 text-sm shadow-md ring-1 ring-border/50 backdrop-blur-sm",
+                            getEventColorClass(e),
+                            "text-primary-foreground"
+                          )}
+                        >
                           <div className="font-bold">{e.title}</div>
                           <div className="text-xs opacity-90">{e.time} - {e.room}</div>
                         </div>
@@ -305,7 +383,7 @@ export default function Calendar() {
                               key={event.id}
                               className={cn(
                                 "absolute left-1 right-1 rounded-lg p-2 text-xs cursor-pointer transition-transform hover:scale-[1.02]",
-                                event.color,
+                                getEventColorClass(event),
                                 "text-primary-foreground"
                               )}
                               style={{

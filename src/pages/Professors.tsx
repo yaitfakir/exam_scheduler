@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/services/api";
+import { supabase } from "@/integrations/supabase/client";
 
 function getLoadColor(load: number) {
   if (load >= 80) return { bg: "bg-destructive/10", text: "text-destructive", bar: "bg-destructive" };
@@ -56,23 +58,54 @@ export default function Professors() {
   const [departmentFilter, setDepartmentFilter] = useState<string | null>(null);
 
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const fetchProfessors = async () => {
     try {
       const data = await api.professors.getAll();
       console.log("Fetched professors:", data);
-      // Add mock derived data for UI (load, surveillances) since they aren't in DB yet
       const enhancedData = data.map((p: any) => ({
         ...p,
-        load: Math.floor(Math.random() * 100), // Mock load
-        surveillances: Math.floor(Math.random() * 15), // Mock surveillances
+        avatar: (p.first_name?.[0] || "").toUpperCase() + (p.last_name?.[0] || "").toUpperCase(),
+        load: Math.floor(Math.random() * 100),
+        surveillances: Math.floor(Math.random() * 15),
         availability: Math.random() > 0.5 ? "Disponible" : "Occupé",
-        avatar: p.first_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) + p.last_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
       }));
       setProfessors(enhancedData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch professors:", error);
-      toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les professeurs." });
+      const msg = error?.message || "";
+      const code = error?.code || "";
+      if (code === "PGRST303" || msg.includes("JWT expired")) {
+        const { data: sessionRes } = await supabase.auth.getSession();
+        if (!sessionRes.session) {
+          toast({ variant: "destructive", title: "Session expirée", description: "Veuillez vous reconnecter." });
+          navigate("/login");
+          return;
+        }
+        const { error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr) {
+          try {
+            const dataRetry = await api.professors.getAll();
+            const enhancedData = dataRetry.map((p: any) => ({
+              ...p,
+              load: Math.floor(Math.random() * 100),
+              surveillances: Math.floor(Math.random() * 15),
+              availability: Math.random() > 0.5 ? "Disponible" : "Occupé",
+              avatar: p.first_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) + p.last_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+            }));
+            setProfessors(enhancedData);
+            return;
+          } catch (err) {
+            console.error("Retry after refresh failed:", err);
+          }
+        }
+        await supabase.auth.signOut();
+        toast({ variant: "destructive", title: "Session expirée", description: "Reconnectez-vous pour continuer." });
+        navigate("/login");
+      } else {
+        toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les professeurs." });
+      }
     } finally {
       setLoading(false);
     }
@@ -85,10 +118,11 @@ export default function Professors() {
   const handleAddProfessor = async (newProf: any) => {
     try {
       const created = await api.professors.create({
-        name: newProf.name,
+        first_name: newProf.first_name,
+        last_name: newProf.last_name,
         email: newProf.email,
         phone: newProf.phone,
-        department: newProf.department
+        department: newProf.department,
       });
 
       // Refresh local state
@@ -103,10 +137,11 @@ export default function Professors() {
   const handleUpdateProfessor = async (updatedProf: any) => {
     try {
       await api.professors.update(updatedProf.id, {
-        name: updatedProf.name,
+        first_name: updatedProf.first_name,
+        last_name: updatedProf.last_name,
         email: updatedProf.email,
         phone: updatedProf.phone,
-        department: updatedProf.department
+        department: updatedProf.department,
       });
       await fetchProfessors();
       setDialogOpen(false);
