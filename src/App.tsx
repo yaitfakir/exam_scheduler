@@ -66,7 +66,7 @@ const App = () => (
           <Route path="/modules" element={<PrivateRoute><Modules /></PrivateRoute>} />
           <Route path="/exams" element={<PrivateRoute><Exams /></PrivateRoute>} />
           <Route path="/surveillance" element={<PrivateRoute><Surveillance /></PrivateRoute>} />
-          <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
+          {/* <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} /> */}
           <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
           <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
           <Route path="/export" element={<PrivateRoute><Export /></PrivateRoute>} />

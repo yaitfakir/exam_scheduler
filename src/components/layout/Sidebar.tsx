@@ -22,13 +22,13 @@ import { Button } from "@/components/ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Calendar, label: "Calendrier", path: "/calendar" },
+  // { icon: Calendar, label: "Calendrier", path: "/calendar" },
   { icon: Users, label: "Professeurs", path: "/professors" },
   { icon: Building2, label: "Salles", path: "/rooms" },
   { icon: BookOpen, label: "Modules", path: "/modules" },
   { icon: ClipboardList, label: "Examens", path: "/exams" },
   { icon: Sparkles, label: "Surveillances", path: "/surveillance" },
-  { icon: FileDown, label: "Export", path: "/export" },
+  { icon: FileDown, label: "Générer", path: "/export" },
   { icon: History, label: "Historique", path: "/history" },
 ];
 
