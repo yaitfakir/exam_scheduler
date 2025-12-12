@@ -16,6 +16,8 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 const statusStyles = {
   available: {
@@ -49,6 +51,7 @@ export default function Rooms() {
   const [showFilters, setShowFilters] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const fetchRooms = async () => {
     try {
@@ -60,9 +63,38 @@ export default function Rooms() {
         currentUsage: Math.floor(Math.random() * 100),
       }));
       setRooms(enhancedData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch rooms:", error);
-      toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les salles." });
+      const msg = error?.message || "";
+      const code = error?.code || "";
+      if (code === "PGRST303" || msg.includes("JWT expired")) {
+        const { data: sessionRes } = await supabase.auth.getSession();
+        if (!sessionRes.session) {
+          toast({ variant: "destructive", title: "Session expirée", description: "Veuillez vous reconnecter." });
+          navigate("/login");
+          return;
+        }
+        const { error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr) {
+          try {
+            const dataRetry = await api.rooms.getAll();
+            const enhancedData = dataRetry.map((r: any) => ({
+              ...r,
+              status: r.status || ["available", "occupied", "maintenance"][Math.floor(Math.random() * 3)],
+              currentUsage: Math.floor(Math.random() * 100),
+            }));
+            setRooms(enhancedData);
+            return;
+          } catch (err) {
+            console.error("Retry after refresh failed:", err);
+          }
+        }
+        await supabase.auth.signOut();
+        toast({ variant: "destructive", title: "Session expirée", description: "Reconnectez-vous pour continuer." });
+        navigate("/login");
+      } else {
+        toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les salles." });
+      }
     } finally {
       setLoading(false);
     }
@@ -78,13 +110,45 @@ export default function Rooms() {
         name: newRoom.name,
         capacity: newRoom.capacity,
         type: newRoom.type,
-        equipment: newRoom.equipment
+        equipment: newRoom.equipment,
+        building: newRoom.building,
       });
       await fetchRooms();
       setDialogOpen(false); // Close dialog
       toast({ title: "Succès", description: "Salle ajoutée avec succès." });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'ajout de la salle." });
+    } catch (error: any) {
+      const msg = error?.message || "";
+      const code = error?.code || "";
+      if (code === "PGRST303" || msg.includes("JWT expired")) {
+        const { data: sessionRes } = await supabase.auth.getSession();
+        if (!sessionRes.session) {
+          toast({ variant: "destructive", title: "Session expirée", description: "Veuillez vous reconnecter." });
+          navigate("/login");
+          return;
+        }
+        const { error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr) {
+          try {
+            await api.rooms.create({
+              name: newRoom.name,
+              capacity: newRoom.capacity,
+              type: newRoom.type,
+              equipment: newRoom.equipment
+            });
+            await fetchRooms();
+            setDialogOpen(false);
+            toast({ title: "Succès", description: "Salle ajoutée avec succès." });
+            return;
+          } catch (err) {
+            console.error("Retry add room after refresh failed:", err);
+          }
+        }
+        await supabase.auth.signOut();
+        toast({ variant: "destructive", title: "Session expirée", description: "Reconnectez-vous pour continuer." });
+        navigate("/login");
+      } else {
+        toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'ajout de la salle." });
+      }
     }
   };
 

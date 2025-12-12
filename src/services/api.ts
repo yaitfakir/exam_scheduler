@@ -6,13 +6,10 @@ export const api = {
     getAll: async () => {
       const { data, error } = await supabase
         .from("professors")
-        .select("*, department:departments(name)")
+        .select("*")
         .order("first_name");
       if (error) throw error;
-      return (data || []).map((p: any) => ({
-        ...p,
-        department: p.department?.name || null,
-      }));
+      return data;
     },
     create: async (professor: {
       first_name: string;
@@ -23,13 +20,13 @@ export const api = {
     }) => {
       let department_id: string | null = null;
       if (professor.department) {
-        const { data: dept, error: deptErr } = await supabase
+        const { data: dept } = await supabase
           .from("departments")
           .select("id")
           .eq("name", professor.department)
           .limit(1);
-        if (!deptErr && dept && dept.length > 0) {
-          department_id = dept[0].id;
+        if (dept && dept.length > 0) {
+          department_id = dept[0].id as string;
         }
       }
 
@@ -39,11 +36,11 @@ export const api = {
         email: professor.email,
         phone: professor.phone,
         department_id,
-      };
+      } as const;
 
       const { data, error } = await supabase
         .from("professors")
-        .insert(payload)
+        .insert(payload as any)
         .select()
         .single();
       if (error) throw error;
@@ -60,20 +57,24 @@ export const api = {
       }>
     ) => {
       let department_id: string | undefined;
-      if (updates.department) {
-        const { data: dept, error: deptErr } = await supabase
-          .from("departments")
-          .select("id")
-          .eq("name", updates.department)
-          .limit(1);
-        if (!deptErr && dept && dept.length > 0) {
-          department_id = dept[0].id;
+      if (updates.department !== undefined) {
+        if (updates.department) {
+          const { data: dept } = await supabase
+            .from("departments")
+            .select("id")
+            .eq("name", updates.department)
+            .limit(1);
+          if (dept && dept.length > 0) {
+            department_id = dept[0].id as string;
+          } else {
+            department_id = null as any;
+          }
         } else {
           department_id = null as any;
         }
       }
 
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         ...(updates.first_name !== undefined && { first_name: updates.first_name }),
         ...(updates.last_name !== undefined && { last_name: updates.last_name }),
         ...(updates.email !== undefined && { email: updates.email }),
@@ -83,7 +84,7 @@ export const api = {
 
       const { data, error } = await supabase
         .from("professors")
-        .update(payload)
+        .update(payload as any)
         .eq("id", id)
         .select()
         .single();
@@ -104,33 +105,70 @@ export const api = {
         .select("*")
         .order("name");
       if (error) throw error;
-      return data;
+      return (data || []).map((r: any) => ({
+        ...r,
+        type:
+          r.room_type === "auditorium"
+            ? "Amphithéâtre"
+            : r.room_type === "lab"
+            ? "Salle TP"
+            : "Salle TD",
+        equipment: [
+          ...(r.has_computers ? ["Ordinateurs"] : []),
+          ...(r.has_projector ? ["Vidéoprojecteur"] : []),
+        ],
+      }));
     },
     create: async (room: {
       name: string;
       capacity: number;
       type: string;
       equipment: string[];
+      building?: string;
     }) => {
+      const room_type = room.type === "Amphithéâtre" ? "auditorium" : room.type === "Salle TP" || room.type === "Laboratoire" ? "lab" : "classroom";
+      const payload = {
+        name: room.name,
+        capacity: room.capacity,
+        room_type,
+        building: room.building || "Bâtiment A",
+        has_computers: !!room.equipment?.includes("Ordinateurs"),
+        has_projector: !!room.equipment?.includes("Vidéoprojecteur"),
+        is_available: true,
+      };
+
       const { data, error } = await supabase
         .from("rooms")
-        .insert(room)
+        .insert(payload as any)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
-    update: async (id: number, updates: any) => {
+    update: async (id: string, updates: any) => {
+      const payload: any = {
+        ...(updates.name !== undefined && { name: updates.name }),
+        ...(updates.capacity !== undefined && { capacity: updates.capacity }),
+        ...(updates.building !== undefined && { building: updates.building }),
+      };
+      if (updates.type !== undefined) {
+        payload.room_type = updates.type === "Amphithéâtre" ? "auditorium" : updates.type === "Salle TP" || updates.type === "Laboratoire" ? "lab" : "classroom";
+      }
+      if (updates.equipment !== undefined) {
+        payload.has_computers = !!updates.equipment?.includes("Ordinateurs");
+        payload.has_projector = !!updates.equipment?.includes("Vidéoprojecteur");
+      }
+
       const { data, error } = await supabase
         .from("rooms")
-        .update(updates)
+        .update(payload)
         .eq("id", id)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
-    delete: async (id: number) => {
+    delete: async (id: string) => {
       const { error } = await supabase.from("rooms").delete().eq("id", id);
       if (error) throw error;
     },
@@ -149,7 +187,6 @@ export const api = {
         )
         .order("name");
       if (error) throw error;
-      // Transformation to match UI expectation if needed (flattening professor name)
       return data.map((m) => ({
         ...m,
         professor: m.professor?.first_name || "Non assigné",
@@ -197,14 +234,12 @@ export const api = {
         .order("date");
       if (error) throw error;
 
-      // Transform for UI
       return data.map((e) => ({
         ...e,
         module: e.module?.name,
         code: e.module?.code,
         room: e.room?.name || "Non assignée",
         supervisor: e.supervisor?.first_name || "Non assigné",
-        // Calculate display format if needed, though DB fields should suffice
       }));
     },
     create: async (exam: any) => {
