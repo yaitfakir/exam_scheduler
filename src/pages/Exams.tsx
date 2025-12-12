@@ -104,41 +104,53 @@ export default function Exams() {
 
   const handleAddExam = async (newExam: any) => {
     try {
+      const moduleId = String(newExam.module_id);
+      const roomId = newExam.room_id ? String(newExam.room_id) : null;
+      const supervisorId = newExam.supervisor_id ? String(newExam.supervisor_id) : null;
+      const durationNum = Number(newExam.duration);
+
       await api.exams.create({
-        module_id: newExam.module_id,
-        room_id: newExam.room_id,
+        module_id: moduleId,
+        room_id: roomId,
         date: newExam.date,
         time: newExam.time,
-        duration: parseInt(newExam.duration),
-        type: newExam.type,
-        supervisor_id: newExam.supervisor_id,
-        status: "confirmed"
+        duration: durationNum,
+        type: newExam.type || null,
+        supervisor_id: supervisorId,
+        status: "scheduled"
       });
       await fetchData();
       setDialogOpen(false);
       toast({ title: "Succès", description: "Examen planifié avec succès." });
     } catch (error) {
-      toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de la création de l'examen." });
+      const message = (error as any)?.message || "Erreur lors de la création de l'examen.";
+      toast({ variant: "destructive", title: "Erreur", description: message });
     }
   };
 
   const handleUpdateExam = async (updatedExam: any) => {
     try {
+      const moduleId = String(updatedExam.module_id);
+      const roomId = updatedExam.room_id ? String(updatedExam.room_id) : null;
+      const supervisorId = updatedExam.supervisor_id ? String(updatedExam.supervisor_id) : null;
+      const durationNum = Number(updatedExam.duration);
+
       await api.exams.update(updatedExam.id, {
-        module_id: updatedExam.module_id,
-        room_id: updatedExam.room_id,
+        module_id: moduleId,
+        room_id: roomId,
         date: updatedExam.date,
         time: updatedExam.time,
-        duration: parseInt(updatedExam.duration),
-        type: updatedExam.type,
-        supervisor_id: updatedExam.supervisor_id
+        duration: durationNum,
+        type: updatedExam.type || null,
+        supervisor_id: supervisorId
       });
       await fetchData();
       setDialogOpen(false);
       setSelectedExam(null);
       toast({ title: "Succès", description: "Examen mis à jour." });
     } catch (error) {
-      toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de la mise à jour." });
+      const message = (error as any)?.message || "Erreur lors de la mise à jour.";
+      toast({ variant: "destructive", title: "Erreur", description: message });
     }
   };
 
