@@ -51,7 +51,11 @@ export function AddExamDialog({ open, onOpenChange, onAdd, onEdit, initialData, 
                 duration: initialData.duration ? initialData.duration.toString().replace("h", "") : "",
                 room_id: initialData.room_id ? initialData.room_id.toString() : "",
                 type: initialData.type || "CC",
-                supervisor_id: initialData.supervisor_id ? initialData.supervisor_id.toString() : "",
+                supervisor_id: initialData.supervisor_id
+                    ? initialData.supervisor_id.toString()
+                    : initialData.professor_id
+                    ? initialData.professor_id.toString()
+                    : "",
             });
         } else {
             setFormData({ module_id: "", date: "", time: "", duration: "", room_id: "", type: "", supervisor_id: "" });
@@ -79,15 +83,14 @@ export function AddExamDialog({ open, onOpenChange, onAdd, onEdit, initialData, 
                 students: 0,
                 groups: []
             }),
-            module_id: parseInt(formData.module_id),
-            room_id: formData.room_id ? parseInt(formData.room_id) : null,
-            supervisor_id: formData.supervisor_id ? parseInt(formData.supervisor_id) : null,
+            module_id: formData.module_id,
+            room_id: formData.room_id ? formData.room_id : null,
+            supervisor_id: formData.supervisor_id ? formData.supervisor_id : null,
             date: formData.date,
-            time: `${formData.time} - ${addTime(formData.time, formData.duration)}`,
-            duration: formData.duration, // Keep as number string, cast in parent if needed
+            time: formData.time,
+            duration: formData.duration,
             type: formData.type,
-            // Add derived/mock fields if needed for UI before refresh
-            module: moduleName // Helper for immediate UI update if optimization is needed
+            module: moduleName
         };
 
         if (initialData && onEdit) {

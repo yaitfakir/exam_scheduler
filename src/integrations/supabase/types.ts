@@ -106,11 +106,11 @@ export type Database = {
           module_id: number
           room_id: number | null
           date: string
-          time: string
-          duration: number
-          type: string | null
+          start_time: string | null
+          end_time: string | null
+          duration_minutes: number | null
           status: string | null
-          supervisor_id: number | null
+          professor_id: number | null
           created_at: string
         }
         Insert: {
@@ -118,11 +118,11 @@ export type Database = {
           module_id: number
           room_id?: number | null
           date: string
-          time: string
-          duration: number
-          type?: string | null
+          start_time?: string | null
+          end_time?: string | null
+          duration_minutes?: number | null
           status?: string | null
-          supervisor_id?: number | null
+          professor_id?: number | null
           created_at?: string
         }
         Update: {
@@ -130,11 +130,11 @@ export type Database = {
           module_id?: number
           room_id?: number | null
           date?: string
-          time?: string
-          duration?: number
-          type?: string | null
+          start_time?: string | null
+          end_time?: string | null
+          duration_minutes?: number | null
           status?: string | null
-          supervisor_id?: number | null
+          professor_id?: number | null
           created_at?: string
         }
         Relationships: [
@@ -151,8 +151,8 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "exams_supervisor_id_fkey"
-            columns: ["supervisor_id"]
+            foreignKeyName: "exams_professor_id_fkey"
+            columns: ["professor_id"]
             referencedRelation: "professors"
             referencedColumns: ["id"]
           }

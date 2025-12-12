@@ -84,15 +84,27 @@ export default function Rooms() {
       setDialogOpen(false); // Close dialog
       toast({ title: "Succès", description: "Salle ajoutée avec succès." });
     } catch (error) {
-      toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'ajout de la salle." });
+      const message = (error as any)?.message || "Erreur lors de l'ajout de la salle.";
+      toast({ variant: "destructive", title: "Erreur", description: message });
+    }
+  };
+
+  const handleDeleteRoom = async (id: number) => {
+    try {
+      await api.rooms.delete(id);
+      setRooms((prev) => prev.filter((r) => r.id !== id));
+      toast({ title: "Supprimée", description: "Salle supprimée avec succès." });
+    } catch (error) {
+      const message = (error as any)?.message || "Impossible de supprimer cette salle.";
+      toast({ variant: "destructive", title: "Erreur", description: message });
     }
   };
 
   const filteredRooms = rooms.filter(
     (room) =>
-      (room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        room.building?.toLowerCase().includes(searchQuery.toLowerCase()) || // potential missing building field in DB, check schema
-        room.type.toLowerCase().includes(searchQuery.toLowerCase())) &&
+      (room.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        room.building?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(room.type || "").toLowerCase().includes(searchQuery.toLowerCase())) &&
       (activeFilter === "all" || room.status === activeFilter)
   );
 
@@ -267,6 +279,12 @@ export default function Rooms() {
                       </div>
                     </div>
                   )}
+
+                  <div className="pt-4 border-t border-border/50 flex justify-end">
+                    <Button variant="ghost" className="text-destructive" onClick={() => handleDeleteRoom(room.id)}>
+                      Supprimer
+                    </Button>
+                  </div>
                 </div>
               );
             })}

@@ -55,7 +55,12 @@ export default function Modules() {
       }));
 
       setModules(enhancedModules);
-      setProfessors(professorsData);
+      setProfessors(
+        professorsData.map((p: any) => ({
+          ...p,
+          name: `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim(),
+        }))
+      );
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les données." });
@@ -70,36 +75,56 @@ export default function Modules() {
 
   const handleAddModule = async (newModule: any) => {
     try {
+      const code = String(newModule.code || "").trim().toUpperCase();
+      if (!code) {
+        toast({ variant: "destructive", title: "Erreur", description: "Le code du module est requis." });
+        return;
+      }
+
+      const semesterNumber = typeof newModule.semester === "string"
+        ? Number(newModule.semester.replace("S", ""))
+        : newModule.semester;
+
       await api.modules.create({
-        code: newModule.code,
+        code,
         name: newModule.name,
-        semester: newModule.semester,
+        semester: semesterNumber,
         credits: newModule.credits,
         professor_id: newModule.professor_id
       });
       await fetchData();
       setDialogOpen(false);
-      toast({ title: "Succès", description: "Module ajouté avec succès." });
+      toast({ title: "Succès", description: "Module ajouté ou mis à jour avec succès." });
     } catch (error) {
-      toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'ajout du module." });
+      const message = (error as any)?.message || "Erreur lors de l'ajout du module.";
+      toast({ variant: "destructive", title: "Erreur", description: message });
     }
   };
 
   const handleUpdateModule = async (updatedModule: any) => {
     try {
+      const code = String(updatedModule.code || "").trim().toUpperCase();
+      const semesterNumber = typeof updatedModule.semester === "string"
+        ? Number(String(updatedModule.semester).replace("S", ""))
+        : updatedModule.semester;
+      const professorId = updatedModule.professor_id === "" || updatedModule.professor_id === undefined
+        ? null
+        : updatedModule.professor_id;
+
       await api.modules.update(updatedModule.id, {
-        code: updatedModule.code,
+        code,
         name: updatedModule.name,
-        semester: updatedModule.semester,
-        credits: updatedModule.credits,
-        professor_id: updatedModule.professor_id
+        semester: semesterNumber,
+        credits: Number(updatedModule.credits) || 3,
+        professor_id: professorId
       });
       await fetchData();
       setDialogOpen(false);
       setSelectedModule(null);
       toast({ title: "Succès", description: "Module mis à jour." });
     } catch (error) {
-      toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de la mise à jour." });
+      const message = (error as any)?.message || "Erreur lors de la mise à jour.";
+      toast({ variant: "destructive", title: "Erreur", description: message });
     }
   };
 
@@ -118,8 +143,8 @@ export default function Modules() {
 
     setSelectedModule({
       ...module,
-      professor_id: prof ? prof.id : null,
-      professor: module.professor // Keep name for display if needed
+      professor_id: prof ? String(prof.id) : "",
+      professor: module.professor
     });
     setDialogOpen(true);
   };

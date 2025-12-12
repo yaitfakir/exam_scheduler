@@ -20,7 +20,7 @@ export const api = {
     }) => {
       const { data, error } = await supabase
         .from("professors")
-        .insert(professor)
+        .insert({ ...professor, name: `${professor.first_name} ${professor.last_name}` })
         .select()
         .single();
       if (error) throw error;
@@ -62,13 +62,18 @@ export const api = {
     },
     create: async (room: {
       name: string;
-      capacity: number;
-      type: string;
-      equipment: string[];
+      capacity: number | string;
+      type?: string | null;
+      equipment?: string[] | null;
     }) => {
+      const payload = {
+        name: String(room.name || "").trim(),
+        capacity: Number(room.capacity || 0),
+      };
+
       const { data, error } = await supabase
         .from("rooms")
-        .insert(room)
+        .insert(payload)
         .select()
         .single();
       if (error) throw error;
@@ -98,26 +103,57 @@ export const api = {
         .select(
           `
                     *,
-                    professor:professors(first_name)
+                    professor:professors(first_name,last_name)
                 `
         )
         .order("name");
       if (error) throw error;
-      // Transformation to match UI expectation if needed (flattening professor name)
-      return data.map((m) => ({
-        ...m,
-        professor: m.professor?.first_name || "Non assigné",
-      }));
+      // Compose full name from joined professor
+      return data.map((m) => {
+        const prof = (m as any).professor as { first_name?: string; last_name?: string } | null | undefined;
+        const fullName = prof && (prof.first_name || prof.last_name)
+          ? `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim()
+          : "Non assigné";
+        return { ...m, professor: fullName };
+      });
     },
     create: async (module: any) => {
-      // we expect module to contain professor_id if it was selected from dropdown
-      const { data, error } = await supabase
+      const code = String(module.code || "").toUpperCase();
+      const { data: existing, error: fetchError } = await supabase
         .from("modules")
-        .insert(module)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
+      if (fetchError) throw fetchError;
+
+      if (existing) {
+        const updates = {
+          name: module.name ?? existing.name,
+          semester: module.semester ?? existing.semester,
+          credits: module.credits ?? existing.credits,
+          professor_id:
+            module.professor_id !== null && module.professor_id !== undefined
+              ? module.professor_id
+              : existing.professor_id,
+        };
+        const { data, error } = await supabase
+          .from("modules")
+          .update(updates)
+          .eq("id", existing.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      } else {
+        const payload = { ...module, code };
+        const { data, error } = await supabase
+          .from("modules")
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
     },
     update: async (id: number, updates: any) => {
       const { data, error } = await supabase
@@ -145,35 +181,114 @@ export const api = {
                     *,
                     module:modules(name, code),
                     room:rooms(name),
-                    supervisor:professors(first_name)
+                    supervisor:professors(first_name,last_name)
                 `
         )
         .order("date");
       if (error) throw error;
 
       // Transform for UI
-      return data.map((e) => ({
-        ...e,
-        module: e.module?.name,
-        code: e.module?.code,
-        room: e.room?.name || "Non assignée",
-        supervisor: e.supervisor?.first_name || "Non assigné",
-        // Calculate display format if needed, though DB fields should suffice
-      }));
+      return data.map((e) => {
+        const sup = (e as any).supervisor as { first_name?: string; last_name?: string } | null | undefined;
+        const supName = sup && (sup.first_name || sup.last_name)
+          ? `${sup.first_name ?? ""} ${sup.last_name ?? ""}`.trim()
+          : "Non assigné";
+
+        const start = (e as any).start_time as string | undefined;
+        const durationMin = (e as any).duration_minutes as number | undefined;
+        let end: string | undefined = (e as any).end_time as string | undefined;
+        if (start && durationMin && !end) {
+          const [h, m] = start.split(":").map((x: string) => parseInt(x, 10));
+          const total = h * 60 + m + durationMin;
+          const eh = Math.floor((total % (24 * 60)) / 60)
+            .toString()
+            .padStart(2, "0");
+          const em = Math.floor(total % 60)
+            .toString()
+            .padStart(2, "0");
+          end = `${eh}:${em}`;
+        }
+
+        return {
+          ...e,
+          module: e.module?.name,
+          code: e.module?.code,
+          room: e.room?.name || "Non assignée",
+          supervisor: supName,
+          time: start && end ? `${start} - ${end}` : start || (e as any).time,
+          duration: typeof durationMin === "number" ? durationMin / 60 : null,
+        };
+      });
     },
     create: async (exam: any) => {
+      const start = String(exam.time || "");
+      const durationMin = Math.round(Number(exam.duration || 0) * 60);
+      let end: string | undefined;
+      if (start && durationMin) {
+        const [h, m] = start.split(":").map((x: string) => parseInt(x, 10));
+        const total = h * 60 + m + durationMin;
+        const eh = Math.floor((total % (24 * 60)) / 60)
+          .toString()
+          .padStart(2, "0");
+        const em = Math.floor(total % 60)
+          .toString()
+          .padStart(2, "0");
+        end = `${eh}:${em}`;
+      }
+
+      const payload: any = {
+        module_id: exam.module_id,
+        room_id: exam.room_id ?? null,
+        date: exam.date,
+        start_time: start || null,
+        end_time: end || null,
+        duration_minutes: durationMin || null,
+        status: exam.status,
+      };
+      if (exam.supervisor_id !== undefined) {
+        payload.professor_id = exam.supervisor_id;
+      }
+
       const { data, error } = await supabase
         .from("exams")
-        .insert(exam)
+        .insert(payload)
         .select()
         .single();
       if (error) throw error;
       return data;
     },
     update: async (id: number, updates: any) => {
+      const start = updates.time ? String(updates.time) : updates.start_time;
+      const durationMin = updates.duration_minutes ?? (updates.duration ? Math.round(Number(updates.duration) * 60) : undefined);
+      let end: string | undefined = updates.end_time;
+      if (!end && start && durationMin) {
+        const [h, m] = start.split(":").map((x: string) => parseInt(x, 10));
+        const total = h * 60 + m + durationMin;
+        const eh = Math.floor((total % (24 * 60)) / 60)
+          .toString()
+          .padStart(2, "0");
+        const em = Math.floor(total % 60)
+          .toString()
+          .padStart(2, "0");
+        end = `${eh}:${em}`;
+      }
+
+      const payload: any = {
+        module_id: updates.module_id,
+        room_id: updates.room_id ?? null,
+        date: updates.date,
+        start_time: start ?? null,
+        end_time: end ?? null,
+        duration_minutes: durationMin ?? null,
+        status: updates.status,
+      };
+      if (updates.supervisor_id !== undefined) {
+        payload.professor_id = updates.supervisor_id;
+      }
+
       const { data, error } = await supabase
         .from("exams")
-        .update(updates)
+        .update(payload)
         .eq("id", id)
         .select()
         .single();
